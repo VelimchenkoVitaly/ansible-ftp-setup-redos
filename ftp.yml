@@ -1,0 +1,61 @@
+--- 
+- name: ftp install
+  hosts: all
+  become: true
+  
+  vars:
+    cfgpath: "/etc/vsftpd/vsftpd.conf"
+    username: ftpuser
+    password: password
+
+  tasks:
+   - name: установка 
+     yum: 
+       name: "vsftpd, ftp"
+       state: latest
+
+   - name: проверка установки
+     stat:
+       path: "{{ cfgpath }}"
+     register: install_info
+   
+   - name: вывод результата установки
+     debug:
+       msg: "установка прошла успешно"
+     when: install_info.stat.exists
+   
+   - name: копирование конфига на сервер
+     copy: 
+       src: "~/ansiblefiles/vsftpd.conf"
+       dest: "/etc/vsftpd/vsftpd.conf"
+       mode: "0555"
+       remote_src: no
+
+   - name: проверка бэкапа
+     stat:
+       path: "{{cfgpath}}.backup"
+     register: backup_info
+
+   - name: бэкап конфига
+     copy:
+       src: "{{ cfgpath }}"
+       dest: "{{cfgpath}}.backup"
+       mode: "0555"
+       remote_src: yes
+     when: not backup_info.stat.exists
+
+   - name: поднимаем
+     shell: |
+       systemctl start vsftpd
+       systemctl enable vsftpd
+   
+ # when: not install_info.stat.exists
+   - name: создаем пользователя
+     user:
+       name: "{{ username  }}"
+       password: "{{'password' | password_hash('sha512') }}"
+       update_password: on_create
+
+   - name: вывод данных для логина
+     debug:
+       msg: "{{ username }} | {{ password }}"
